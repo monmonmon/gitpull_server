@@ -40,7 +40,7 @@ def register_repositories(config):
             match = re.search("""/([^/]+)\.git$""", url)
             repository_name = match.group(1)
             config['__repositories'][repository_name] = directory
-            print >> sys.stderr, "  {0}: {1}".format(repository_name, directory)
+            print "  {0}: {1}".format(repository_name, directory)
         except git.exc.InvalidGitRepositoryError as e:
             raise Exception(directory + ": git リポジトリではありません。")
         except AttributeError as e:
@@ -73,11 +73,11 @@ def process_post():
         # リポジトリ名からGITディレクトリを取得
         repository_directory = config['__repositories'].get(repository_name)
         if not repository_directory:
-            print >> sys.stderr, "ignoring unregistered repository: " + repository_name
+            print "ignoring unregistered repository: " + repository_name
             return
-        print >> sys.stderr, "repository: " + repository_name
-        print >> sys.stderr, "directory: " + repository_directory
-        print >> sys.stderr, "committer: " + email_address
+        print "repository: " + repository_name
+        print "directory: " + repository_directory
+        print "committer: " + email_address
         # origin を git pull
         repo = git.Repo(repository_directory)
         repo.remotes.origin.pull()
@@ -92,7 +92,7 @@ def process_post():
 </html>
 """
     except Exception as e:
-        print >> sys.stderr, "ERROR: ", e
+        print "ERROR: ", e
 
 def main():
     """
@@ -120,11 +120,8 @@ def main():
     # Webサーバ起動
     if options.daemon:
         # デーモンとして起動
-        dc = DaemonContext(
-            #stdout=open(config['logfilename'], 'w+'),
-            stdout=open(config['logfilename'], 'w+'),
-            stderr=open(config['error_logfilename'], 'w+')
-            )
+        fp = open(config['logfilename'], 'w+')
+        dc = DaemonContext(stdout = fp, stderr = fp)
         with dc:
             print >>sys.stderr, os.getpid()
             run(host=hostname, port=config['server_port'])
