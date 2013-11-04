@@ -25,21 +25,6 @@ import git
 
 config = None
 
-def sendmail(to_address, from_address, subject, message):
-    """
-    メール投げる
-    """
-    import smtplib
-    from email.mime.text import MIMEText
-    msg = MIMEText(message)
-    msg['Subject'] = subject
-    msg['From'] = from_address
-    msg['To'] = to_address
-    s = smtplib.SMTP()
-    s.connect()
-    s.sendmail(from_address, [to_address], msg.as_string())
-    s.close()
-
 def register_repositories(config):
     """
     リポジトリ名→リポジトリディレクトリのマップを作成
