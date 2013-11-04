@@ -52,12 +52,8 @@ def process_get():
     """
     GETリクエストを処理する
     """
-    fp = open('get.html.tmpl', 'rb')
-    html = fp.read()
-    fp.close()
     options = ['<option>{r}</option>'.format(r=r) for r in config['__repositories']]
-    html = html.replace('%OPTIONS%', ''.join(options))
-    return html
+    return config['get_response_template'].replace('%OPTIONS%', ''.join(options))
 
 @post('/')
 def process_post():
@@ -115,6 +111,12 @@ def main():
     config = config['git_server']
     # リポジトリ名→リポジトリディレクトリのマップを作成
     config = register_repositories(config)
+    # GETリクエストへのレスポンス用のHTMLテンプレートを読み込んでおく
+    template_path = os.path.join(os.path.abspath(os.path.dirname(__file__)),
+                        'get.html.tmpl')
+    fp = open(template_path, 'rb')
+    config['get_response_template'] = fp.read()
+    fp.close()
     # ホスト名を取得
     hostname = os.uname()[1]
     # Webサーバ起動
