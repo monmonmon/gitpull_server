@@ -12,6 +12,11 @@ Apache などの既存の Web サーバ上で動くアプリケーションで�
 任意のユーザで実行させることができ、UNIX のパーミッションの問題を回避できます。
 """
 
+__author__ = "Yamada Shimon"
+__status__ = "development"
+__version__ = "0.0.1"
+__date__    = "2013/11/05"
+
 import os
 import sys
 import re
@@ -111,7 +116,7 @@ def process_post():
         # リクエストからリポジトリ名、コミットした人のEMAILアドレスを抜き出す
         payload = request.forms['payload']
         data = json.loads(payload)
-        email_address = data['revisions'][0]['author']['email']
+        email_address = data['commits'][0]['author']['email']
         repository_name = data['repository']['name']
         # リポジトリ名からGITディレクトリを取得
         repository_directory = config['__repositories'].get(repository_name)
