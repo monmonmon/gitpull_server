@@ -26,6 +26,61 @@ import git
 
 config = None
 
+def load_config_file(configfile):
+    """
+    設定ファイルをロード、チェック、デフォルト値補完する
+    また、リポジトリディレクトリのリストからリポジトリ名→リポジトリディレクトリのマップを作成する
+    """
+    default_config = {
+        'git_command': '/usr/bin/git',
+        'port': 56789,
+        'hostname': os.uname()[1],
+        'logfilename': '/tmp/gitpull_server.log',
+        'pidfilename': '/tmp/gitpull_server.pid',
+        'repositories': [],
+    }
+    try:
+        # yamlファイルからロード
+        stream = file(configfile, "r")
+        config = yaml.load(stream)
+        stream.close()
+        config = config['git_server']
+        # 設定値をデフォルト値で補完＆型チェック
+        for key, value in default_config.iteritems():
+            if key not in config:
+                config[key] = value
+            elif type(config[key]) != type(value):
+                # 型の不整合
+                raise Exception('config parameter "{0}" should be {1}'.format(key, type(value)))
+        # 詳細なチェック
+        if not os.access(config['git_command'], os.X_OK):
+            raise Exception('git command ' + config['git_command'] + ' is not executable')
+        if not os.path.isdir(os.path.dirname(config['logfilename'])):
+            raise Exception('log directory ' + os.path.dirname(config['logfilename']) + ' does not exist')
+        if not os.path.isdir(os.path.dirname(config['pidfilename'])):
+            raise Exception('pidfile directory ' + os.path.dirname(config['pidfilename']) + ' does not exist')
+        if len(config['repositories']) == 0:
+            raise Exception('repositories are not registered')
+        # リポジトリ名→リポジトリディレクトリのマップを作成
+        config['__repositories'] = {}
+        for directory in config['repositories']:
+            if not os.path.isdir(directory):
+                raise Exception(directory + ': not a directory')
+            try:
+                repo = git.Repo(directory)
+                url = repo.remotes.origin.url
+                match = re.search("""/([^/]+)\.git$""", url)
+                repository_name = match.group(1)
+                config['__repositories'][repository_name] = directory
+            except git.exc.InvalidGitRepositoryError as e:
+                raise Exception(directory + ": not a git repository")
+            except AttributeError as e:
+                raise Exception(directory + ": failed to get the repository name from .git/config")
+        return config
+    except Exception as e:
+        print "ERROR:", e
+        return None
+
 def kill_daemon():
     """
     実行中のデーモンをkillする
@@ -38,28 +93,6 @@ def kill_daemon():
         pid = int(pidfp.read())
     os.kill(pid, signal.SIGTERM)
     return True
-
-def register_repositories(config):
-    """
-    リポジトリ名→リポジトリディレクトリのマップを作成
-
-    各リポジトリディレクトリの origin の url 設定から、リポジトリ名を取得する
-    """
-    config['__repositories'] = {}
-    print "repositories:"
-    for directory in config['repositories']:
-        try:
-            repo = git.Repo(directory)
-            url = repo.remotes.origin.url
-            match = re.search("""/([^/]+)\.git$""", url)
-            repository_name = match.group(1)
-            config['__repositories'][repository_name] = directory
-            print "  {0}: {1}".format(repository_name, directory)
-        except git.exc.InvalidGitRepositoryError as e:
-            raise Exception(directory + ": git リポジトリではありません。")
-        except AttributeError as e:
-            raise Exception(directory + ": .git/config からのリポジトリ名の取得に失敗しました。")
-    return config
 
 @get('/')
 def process_get():
@@ -107,7 +140,6 @@ def process_post():
 def main():
     """
     メイン処理
-    設定をロードしてWebサーバを起動する
     """
     # コマンドラインオプションをパーズ
     optionparser = OptionParser(usage="""Usage: %prog <config file>""")
@@ -116,25 +148,22 @@ def main():
     (options, args) = optionparser.parse_args()
     if len(args) != 1:
         optionparser.print_help()
-        sys.exit(1)
-    # 設定ファイルをロード
-    stream = file(args[0], "r")
+        return 1
+    # 設定ファイルをロード＆チェック
     global config
-    config = yaml.load(stream)
-    stream.close()
-    config = config['git_server']
+    config = load_config_file(args[0])
+    if not config:
+        return 1
     # killモード
     if options.kill:
         if kill_daemon():
             print "killed the daemon"
         else:
             print "daemon is not running"
-        return
-    # リポジトリ名→リポジトリディレクトリのマップを作成
-    config = register_repositories(config)
+        return 1
     # GETリクエストへのレスポンス用のHTMLテンプレートを読み込んでおく
-    template_path = os.path.join(os.path.abspath(os.path.dirname(__file__)),
-                        'get.html.tmpl')
+    template_path = os.path.join(
+        os.path.abspath(os.path.dirname(__file__)), 'get.html.tmpl')
     with open(template_path, 'rb') as fp:
         config['get_response_template'] = fp.read()
     # ホスト名を取得
@@ -145,7 +174,7 @@ def main():
         pidfile = lockfile.FileLock(config['pidfilename'])
         if pidfile.is_locked():
             print "daemon is already running. quit"
-            return
+            return 1
         logfp = open(config['logfilename'], 'a')
         context = daemon.DaemonContext(
             pidfile = pidfile,
@@ -158,10 +187,10 @@ def main():
             with open(context.pidfile.lock_file, 'w') as pidfp:
                 print >>pidfp, os.getpid()
             # サーバ起動
-            run(host=hostname, port=config['server_port'])
+            run(host=config['hostname'], port=config['port'])
     else:
         # そのまま起動
-        run(host=hostname, port=config['server_port'])
+        run(host=config['hostname'], port=config['port'])
 
 if __name__ == '__main__':
     main()
