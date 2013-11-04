@@ -2,7 +2,7 @@ git_server:
   # gitコマンドのパス
   git_command: /usr/bin/git
   # 待受けポート番号
-  server_port: 56789
+  port: 56789
   # ログファイルパス
   logfilename: /tmp/gitpull_server.log
   # pidファイルへのパス
