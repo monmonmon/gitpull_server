@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>gitpull_server.py</title>
+  </head>
+  <body>
+    <h1>gitpull_server is running!</h1>
+    <p>
+      以下のフォームで、Web Hook からの POST リクエストをシミュレートすることが出来ます。git pull させたいリポジトリを選択して submit ボタンをクリックして下さい。
+      <!-- With the testing form below you can mimic the post request
+      from the web hook to the running gitpull_server.py. Select a
+      repository you want it to git pull and click the submit button. -->
+    </p>
+    <form method="POST" action="/">
+      <select id="repositories">%OPTIONS%</select>
+      <input type="hidden" name="payload" id="payload" value="">
+      <input type="submit" value="Submit">
+    </form>
+  </body>
+  <script src="http://code.jquery.com/jquery-1.10.2.min.js"></script>
+  <script>
+$(function () {
+    $('#repositories').on('change', function () {
+        var payload = {
+            "repository": {
+                "name": $(this).val()
+            },
+            "revisions": [
+                {
+                    "author": {
+                        "email": "example@example.com"
+                    }
+                }
+            ]
+        };
+        $('#payload').val(JSON.stringify(payload));
+        console.log(JSON.stringify(payload));
+    }).trigger('change');
+});
+  </script>
+</html>

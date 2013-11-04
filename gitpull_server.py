@@ -17,6 +17,7 @@ import sys
 import re
 import json
 import yaml
+import urllib
 from optparse import OptionParser
 from bottle import route, get, post, run, template, request
 from daemon import DaemonContext
@@ -61,10 +62,22 @@ def register_repositories(config):
             raise Exception(directory + ": .git/config からのリポジトリ名の取得に失敗しました。")
     return config
 
-@post('/gitpull')
-def process_gitpull():
+@get('/')
+def process_get():
     """
-    /gitpull へのPOSTリクエストを処理する
+    GETリクエストを処理する
+    """
+    fp = open('get.html.tmpl', 'rb')
+    html = fp.read()
+    fp.close()
+    options = ['<option>{r}</option>'.format(r=r) for r in config['__repositories']]
+    html = html.replace('%OPTIONS%', ''.join(options))
+    return html
+
+@post('/')
+def process_post():
+    """
+    POSTリクエストを処理する
     """
     try:
         # リクエストからリポジトリ名、コミットした人のEMAILアドレスを抜き出す
@@ -83,6 +96,16 @@ def process_gitpull():
         # origin を git pull
         repo = git.Repo(repository_directory)
         repo.remotes.origin.pull()
+        return """<!DOCTYPE html>
+<html>
+  <head>
+    <title>gitpull_server.py</title>
+  </head>
+  <body>
+    success :)
+  </body>
+</html>
+"""
     except Exception as e:
         print >> sys.stderr, "ERROR: ", e
 
