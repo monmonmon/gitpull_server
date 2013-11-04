@@ -1,7 +1,13 @@
 git_server:
-  git_command: /usr/bin/git						# gitコマンドのパス
-  server_port: 56789							# 待受けポート番号
-  logfilename: /tmp/gitpull_server.log			# ログファイルパス
-  repositories:									# リポジトリのディレクトリパスのリスト
+  # gitコマンドのパス
+  git_command: /usr/bin/git
+  # 待受けポート番号
+  server_port: 56789
+  # ログファイルパス
+  logfilename: /tmp/gitpull_server.log
+  # pidファイルへのパス
+  pidfilename: /tmp/gitpull_server.pid
+  # リポジトリのディレクトリパスのリスト
+  repositories:
     - /path/to/git/repository
     - /path/to/another/git/repository

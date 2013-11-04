@@ -20,10 +20,24 @@ import yaml
 import urllib
 from optparse import OptionParser
 from bottle import route, get, post, run, template, request
-from daemon import DaemonContext
+import daemon
+import lockfile
 import git
 
 config = None
+
+def kill_daemon():
+    """
+    実行中のデーモンをkillする
+    """
+    import signal
+    pidfile = lockfile.FileLock(config['pidfilename'])
+    if not pidfile.is_locked():
+        return False
+    with open(pidfile.lock_file, 'r') as pidfp:
+        pid = int(pidfp.read())
+    os.kill(pid, signal.SIGTERM)
+    return True
 
 def register_repositories(config):
     """
@@ -32,7 +46,7 @@ def register_repositories(config):
     各リポジトリディレクトリの origin の url 設定から、リポジトリ名を取得する
     """
     config['__repositories'] = {}
-    print "registering repositories..."
+    print "repositories:"
     for directory in config['repositories']:
         try:
             repo = git.Repo(directory)
@@ -98,34 +112,52 @@ def main():
     # コマンドラインオプションをパーズ
     optionparser = OptionParser(usage="""Usage: %prog <config file>""")
     optionparser.add_option("-d", dest="daemon", action="store_true", help="run as a daemon")
+    optionparser.add_option("-k", dest="kill", action="store_true", help="kill the running daemon")
     (options, args) = optionparser.parse_args()
     if len(args) != 1:
         optionparser.print_help()
         sys.exit(1)
-    configfile = args[0]
     # 設定ファイルをロード
-    stream = file(configfile, "r")
+    stream = file(args[0], "r")
     global config
     config = yaml.load(stream)
     stream.close()
     config = config['git_server']
+    # killモード
+    if options.kill:
+        if kill_daemon():
+            print "killed the daemon"
+        else:
+            print "daemon is not running"
+        return
     # リポジトリ名→リポジトリディレクトリのマップを作成
     config = register_repositories(config)
     # GETリクエストへのレスポンス用のHTMLテンプレートを読み込んでおく
     template_path = os.path.join(os.path.abspath(os.path.dirname(__file__)),
                         'get.html.tmpl')
-    fp = open(template_path, 'rb')
-    config['get_response_template'] = fp.read()
-    fp.close()
+    with open(template_path, 'rb') as fp:
+        config['get_response_template'] = fp.read()
     # ホスト名を取得
     hostname = os.uname()[1]
     # Webサーバ起動
     if options.daemon:
         # デーモンとして起動
-        fp = open(config['logfilename'], 'w+')
-        dc = DaemonContext(stdout = fp, stderr = fp)
-        with dc:
-            print >>sys.stderr, os.getpid()
+        pidfile = lockfile.FileLock(config['pidfilename'])
+        if pidfile.is_locked():
+            print "daemon is already running. quit"
+            return
+        logfp = open(config['logfilename'], 'a')
+        context = daemon.DaemonContext(
+            pidfile = pidfile,
+            stdout = logfp,
+            stderr = logfp
+            )
+        with context:
+            print "\nstart daemon (PID: {pid})".format(pid = os.getpid())
+            # lockfileにpidを書き出す
+            with open(context.pidfile.lock_file, 'w') as pidfp:
+                print >>pidfp, os.getpid()
+            # サーバ起動
             run(host=hostname, port=config['server_port'])
     else:
         # そのまま起動
