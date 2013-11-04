@@ -8,13 +8,14 @@ hoehoe
 
 import os
 import sys
-import json
 import commands
+import json
+import yaml
 from optparse import OptionParser
 from bottle import route, get, post, run, template, request
 from daemon import DaemonContext
 
-configfile = "config.json"
+configfile = "config.yml"
 
 def sendmail(to_address, from_address, subject, message):
     """
@@ -79,10 +80,11 @@ def main():
         optionparser.print_help()
         sys.exit(1)
     configfile = args[0]
-    # 設定ファイル (json) をロード
-    fp = open(configfile, "r")
-    config = json.load(fp)
-    fp.close()
+    # 設定ファイルをロード
+    stream = file(configfile, "r")
+    config = yaml.load(stream)
+    stream.close()
+    config = config['git_server']
     # ホスト名を取得
     hostname = os.uname()[1]
     # Webサーバ起動

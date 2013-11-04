@@ -1,0 +1,10 @@
+git_server:
+  git_command: /usr/bin/git
+  server_port: 56789
+  logfilename: /tmp/gitpull_server.log
+  error_logfilename: /tmp/gitpull_server.err
+  repositories:
+    - /path/to/git/repository
+    - /path/to/another/git/repository
+  email:
+    from_address: example@example.com
