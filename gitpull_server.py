@@ -3,19 +3,26 @@
 # vim: set fileencoding=utf-8
 
 """
-hoehoe
+gitpull_server.py
+
+Backlog の [Git Web フック][article1] を利用して、サーバ上での git pull を自動化するスクリプトです。
+Web サーバとして動作して Backlog からのリクエストを待ち受けます。
+
+Apache などの既存の Web サーバ上で動くアプリケーションではなく専用の Web サーバとして動作するため、
+任意のユーザで実行させることができ、UNIX のパーミッションの問題を回避できます。
 """
 
 import os
 import sys
-import commands
+import re
 import json
 import yaml
 from optparse import OptionParser
 from bottle import route, get, post, run, template, request
 from daemon import DaemonContext
+import git
 
-configfile = "config.yml"
+config = None
 
 def sendmail(to_address, from_address, subject, message):
     """
@@ -32,24 +39,32 @@ def sendmail(to_address, from_address, subject, message):
     s.sendmail(from_address, [to_address], msg.as_string())
     s.close()
 
-def gitpull(repository_directory, email_address):
+def register_repositories(config):
     """
-    指定したディレクトリ下で git pull を実行する。
-    git pull に失敗したらコミットした人にアラートメールを送信する。
-    @param str repository_name リポジトリ名
-    @param str email_address   コミットした人のEMAILアドレス
+    リポジトリ名→リポジトリディレクトリのマップを作成
+
+    各リポジトリディレクトリの origin の url 設定から、リポジトリ名を取得する
     """
-    # リポジトリのディレクトリに移動
-    os.chdir(repository_directory)
-    # git pull実行
-    (status, git_message) = commands.getstatusoutput(config['git_command'] + ' pull');
-    if 0 != status:
-        sendmail(email_address, config['from_address'], 'Git pull failed', git_message)
+    config['__repositories'] = {}
+    print "registering repositories..."
+    for directory in config['repositories']:
+        try:
+            repo = git.Repo(directory)
+            url = repo.remotes.origin.url
+            match = re.search("""/([^/]+)\.git$""", url)
+            repository_name = match.group(1)
+            config['__repositories'][repository_name] = directory
+            print >> sys.stderr, "  {0}: {1}".format(repository_name, directory)
+        except git.exc.InvalidGitRepositoryError as e:
+            raise Exception(directory + ": git リポジトリではありません。")
+        except AttributeError as e:
+            raise Exception(directory + ": .git/config からのリポジトリ名の取得に失敗しました。")
+    return config
 
 @post('/gitpull')
 def process_gitpull():
     """
-    /git/pull へのPOSTリクエストを処理する
+    /gitpull へのPOSTリクエストを処理する
     """
     try:
         # リクエストからリポジトリ名、コミットした人のEMAILアドレスを抜き出す
@@ -57,21 +72,25 @@ def process_gitpull():
         data = json.loads(payload)
         email_address = data['revisions'][0]['author']['email']
         repository_name = data['repository']['name']
-        repository_directory = config['repositories'][repository_name]
+        # リポジトリ名からGITディレクトリを取得
+        repository_directory = config['__repositories'].get(repository_name)
+        if not repository_directory:
+            print >> sys.stderr, "ignoring unregistered repository: " + repository_name
+            return
         print >> sys.stderr, "repository: " + repository_name
         print >> sys.stderr, "directory: " + repository_directory
         print >> sys.stderr, "committer: " + email_address
-        # gitpull
-        gitpull(repository_directory, email_address)
+        # origin を git pull
+        repo = git.Repo(repository_directory)
+        repo.remotes.origin.pull()
     except Exception as e:
         print >> sys.stderr, "ERROR: ", e
 
 def main():
     """
     メイン処理
-    設定を読んでWebサーバを起動する
+    設定をロードしてWebサーバを起動する
     """
-    global config
     # コマンドラインオプションをパーズ
     optionparser = OptionParser(usage="""Usage: %prog <config file>""")
     optionparser.add_option("-d", dest="daemon", action="store_true", help="run as a daemon")
@@ -82,9 +101,12 @@ def main():
     configfile = args[0]
     # 設定ファイルをロード
     stream = file(configfile, "r")
+    global config
     config = yaml.load(stream)
     stream.close()
     config = config['git_server']
+    # リポジトリ名→リポジトリディレクトリのマップを作成
+    config = register_repositories(config)
     # ホスト名を取得
     hostname = os.uname()[1]
     # Webサーバ起動
