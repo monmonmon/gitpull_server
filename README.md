@@ -1,133 +1,132 @@
 # gitpull_server.py
 
-Backlog の [Git Web フック][article1] を利用して、サーバ上での git pull を自動化するスクリプトです。
-Web サーバとして動作して Backlog からのリクエストを待ち受けます。
+Github の [Post-Receive Hooks][github1] や Backlog の [Git Web フック][backlog1] は、
+git pull をフックとして任意のURLに POST リクエストを送信させられるサービスです。
 
-Apache などの既存の Web サーバ上で動くアプリケーションではなく専用の Web サーバとして動作するため、
-任意のユーザで実行させることができ、
-git pull する際のパーミッションの問題を回避できます。
+gitpull_server.py は、このリクエストを受信して git pull を自動実行するサーバアプリケーションです。
 
-ポートを開ける必要があるため本番環境には不向きです。
-開発サーバで git pull の手間を省く用途を想定しています。
+既存の Web サーバ（Apache 等）上で動くアプリケーションではなく、独立した Web サーバとして動作するため、任意のユーザで実行させることができ、UNIX のパーミッションの問題を回避できます。
 
 みんな大好き Python 製です。
+
+# 注意点
+
+- パスワードなしで git pull 出来るリポジトリのみ対応（今のところ）。パスワードなし公開鍵で SSH で git pull するようにして下さい。
+- 専用のポートを開ける必要があるため、使いどころには注意して下さい。開発サーバで git pull の手間を省く用途を想定しています。
+- ポート番号さえ分かれば誰でも git pull を実行させられてしまうというリスクがあります。
 
 # セットアップ
 
 3段階に分けて説明します。
 
-## 1. とりあえず動かすとこまで
+## 1. Python 環境の準備
 
-python の 2 系がインストールされてることを確認して下さい。
+Python の2系がインストールされていなければインストールして下さい。
 
 	$ python -V
 	Python 2.7.3
 
-python モジュール [bottle][] と [daemon][] をインストールします。
+Python モジュールのパッケージ管理システム **pip** をインストールします。easy_install（これも Python 付属のパッケージ管理システム）でインストール出来ます。
 
-[bottle][] は pip でインストール。
+    $ easy_install pip
 
-	$ pip install bottle
+一部パッケージのアップデートが必要かも？（pip install -r でエラーが出たので…）
 
-[daemon][] の方は pip で入るバージョンが古いので、Web サイトからtarball をダウンロードしてインストールして下さい。
+    $ pip install -U distribute
+    $ pip install -U setuptools
 
-	$ curl -O https://pypi.python.org/packages/source/p/python-daemon/python-daemon-1.5.5.tar.gz
-	$ tar xf python-daemon-1.5.5.tar.gz
-	$ cd python-daemon-1.5.5
-	$ python setup.py install
+pip を使って、動作に必要なモジュールを自動でインストール出来ます。
+インストールするのは [GitPython][], [PyYAML][], [bottle][], [python-daemon][] の4つ。
 
-gitpull_server.py の設定ファイルを書きます。 `config.json.sample` をコピーして、
+    $ pip install -r packages.txt
 
-	$ cp config.json.sample config.json
+ちなみに、インストール済みのパッケージ一覧は `pip list` で。
 
-環境に合わせて修正します。
+	$ pip list
 
-	$ vim config.json
-	{
-	    "git_command": "/usr/bin/git",                  // gitコマンドのパス
-	    "server_port": 56789,                           // 待受けるポート番号
-	    "logfilename": "/tmp/gitpull.log",              // ログファイル
-	    "error_logfilename": "/tmp/gitpull.err",        // エラーログファイル
-	    "repositories": {                               // リポジトリの設定（複数指定可）
-	        "repository1": "/path/to/git/repository",   //   "リポジトリ名": "リポジトリのディレクトリパス" のように書きます
-	        "repository2": "/another/git/repository"
-	    },
-	    "email" {
-	        "from_address": "hoehoe@hoehoe.com"         // git pull 失敗時に飛ばすメールのFROMアドレス
-	    }
-	}
 
-試しに起動してみます。↓のように表示されればOK。Ctrl-C で終了。
 
-	$ ./gitpull_server.py config.json
+### 2. 動かしてみる
+
+gitpull_server.py の設定ファイルを書きます。
+`config.yml.sample` を参考に修正して下さい。
+
+	$ cp config.yml.sample config.yml
+	$ vim config.yml
+
+試しに起動してみましょう。GIT リポジトリで git pull 可能なユーザで起動して下さい。
+
+	$ sudo -u user1 ./gitpull_server.py config.yml      # "user1" ユーザで起動する場合
 	Bottle v0.11.6 server starting up (using WSGIRefServer())...
-	Listening on http://MonBookAir.local:56789/
+	Listening on http://MonBookAir.local:56789/                 ←登録するURL
 	Hit Ctrl-C to quit.
 
-## 2. git pull させてみる
+作業者自身が git pull 出来る場合は sudo 不要。
 
-POST リクエストに応えてちゃんと git pull してくれるかも実験しましょう。
-
-GITリポジトリへの書き込み権限のあるユーザで起動します（作業者自身が書き込める場合は普通に起動します）。
-
-	$ sudo -u user1 ./gitpull_server.py config.json
+	$ ./gitpull_server.py config.yml
 	Bottle v0.11.6 server starting up (using WSGIRefServer())...
-	Listening on http://MonBookAir.local:56789/
+	Listening on http://MonBookAir.local:56789/                 ←登録するURL
 	Hit Ctrl-C to quit.
 
-別のシェルを立ち上げて、curl コマンドでリクエストを投げます。
-"your\_email\_address@example.com" というGITアカウントが "repository1" リポジトリにコミットしたと想定すると、こんな感じ。
+画面にこんな風に表示されればOKです。
 
-	$ EMAIL=your_email_address@example.com
-	$ REPOSITORY=repository1
-	$ PORT=56789
-	$ curl -d payload="%7B%22before%22%3A%22%22%2C%22ref%22%3A%22refs/heads/develop%22%2C%22after%22%3A%22%22%2C%22repository%22%3A%7B%22description%22%3A%22%22%2C%22url%22%3A%22%22%2C%22name%22%3A%22${REPOSITORY}%22%7D%2C%22revisions%22%3A%5B%7B%22message%22%3A%22%22%2C%22modified%22%3A%5B%22%22%5D%2C%22id%22%3A%22%22%2C%22author%22%3A%7B%22name%22%3A%22%22%2C%22email%22%3A%22${EMAIL}%22%7D%2C%22url%22%3A%22%22%2C%22timestamp%22%3A%22%22%7D%5D%7D" http://$(hostname):${PORT}/gitpull
+矢印で示したように、URL が表示されていると思います。
+この URL を後で [Post-Receive Hooks][github1] (Github) や [Git Web フック][backlog1] (Backlog) に登録するのですが、
+とりあえずブラウザで開いてみて下さい。
 
-サーバを立ち上げた方のシェルに↓のようなメッセージが出ていればOK。
+ブラウザで開くと、テスト用フォームが表示されます。
+このフォームを使って、Github や Backlog を介さずに、Web Hook の POST リクエストをシミュレートして実際に git pull が動作するかどうかテストすることが出来ます。
 
-	$ sudo -u user1 ./gitpull_server.py config.json
-	Bottle v0.11.6 server starting up (using WSGIRefServer())...
-	Listening on http://MonBookAir.local:56789/
-	Hit Ctrl-C to quit.
+select でリポジトリを選択して、ボタンをクリックして下さい。
 
-	repository: repository1
-	directory: /path/to/git/repository
-	committer: your_email_address@example.com
-	192.168.12.16 - - [01/Nov/2013 20:15:17] "POST /gitpull HTTP/1.1" 200 0
+ブラウザに success と表示されれば成功です。
+
+
 
 ## 3. Backlog の Git Web フック経由で動作させる
 
 gitpull_server.py をデーモンとして立ち上げてしまいましょう。
 `-d` オプションを付けて起動するだけ。
 
-	$ sudo -u user1 ./gitpull_server.py config.json -d
+	$ sudo -u user1 ./gitpull_server.py config.yml -d
+	
+	or
+	
+	$ ./gitpull_server.py config.yml -d
 
-そしたら[ここ][article1]や[ここ][article2]を参考に、
-Backlog の Git Web フックに URL を登録します。
-登録する URL は
+ログファイルが設定ファイルの logfilename に設定したパスに作られます。
 
-**http://＜GITリポジトリのあるサーバ名＞:＜設定したポート番号＞/gitpull**
+	$ cat /tmp/gitpull_server.log
 
-です。これで準備完了。
+そしたら Web Hook に URL を登録します。
 
-試しに、別のマシンでリポジトリに対して何かコミットして git push してみて下さい。
+Github の場合は[このへん][github1]、
+Backlog の場合は[このへん][backlog1]を参考に、
+さっきの URL を登録して下さい。
+
+これでセットアップ完了です。
+
+試しに、 gitpull_server.py に設定したのとは別のリポジトリから何かコミットして git push してみて下さい。
 変更がサーバ上のリポジトリに自動で反映されていれば成功です。
 
 
-# 停止するには
+# デーモンを停止するには
 
-kill しちゃって下さい。
+`-k` オプションで kill 出来ます。
 
-	$ pkill -f gitpull_server
+	$ ./gitpull_server.py config.yml -k
 
 
 # 参考
-- [Git Webフック｜Backlogを使いこなそう｜どこでもプロジェクト管理バックログ][article1]
-- [サルでも分かるGit Webフック入門 | Backlogブログ][article2]
+- [Git Webフック｜Backlogを使いこなそう｜どこでもプロジェクト管理バックログ][backlog1]
+- [サルでも分かるGit Webフック入門 | Backlogブログ][backlog2]
 - [Bottle: Python Web Framework](http://bottlepy.org/docs/dev/)
 - [python-daemon 1.5.5 : Python Package Index](https://pypi.python.org/pypi/python-daemon/)
 
-[article1]: http://www.backlog.jp/howto/userguide/userguide1710.html "Git Webフック｜Backlogを使いこなそう｜どこでもプロジェクト管理バックログ"
-[article2]: http://www.backlog.jp/blog/2013/05/gitwebhook-for-monkey.html "サルでも分かるGit Webフック入門 | Backlogブログ"
+[github1]: https://help.github.com/articles/post-receive-hooks "Post-Receive Hooks · GitHub Help"
+[backlog1]: http://www.backlog.jp/howto/userguide/userguide1710.html "Git Webフック｜Backlogを使いこなそう｜どこでもプロジェクト管理バックログ"
+[backlog2]: http://www.backlog.jp/blog/2013/05/gitwebhook-for-monkey.html "サルでも分かるGit Webフック入門 | Backlogブログ"
+[GitPython]: https://github.com/gitpython-developers/GitPython "gitpython-developers/GitPython"
 [bottle]: http://bottlepy.org/docs/dev/ "Bottle: Python Web Framework"
-[daemon]: https://pypi.python.org/pypi/python-daemon/ "python-daemon 1.5.5 : Python Package Index"
+[python-daemon]: https://pypi.python.org/pypi/python-daemon/ "python-daemon 1.5.5 : Python Package Index"
+[PyYAML]: http://pyyaml.org/ "PyYAML"
