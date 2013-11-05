@@ -180,8 +180,8 @@ def main():
         os.path.abspath(os.path.dirname(__file__)), 'get.html.tmpl')
     with open(template_path, 'rb') as fp:
         get_html_template = fp.read()
-        options = ['<option>{r}</option>'.format(r=r) for r in config['__repositories']]
-        config['get_response'] = get_html_template.replace('%OPTIONS%', ''.join(options))
+        select_options = ['<option>{r}</option>'.format(r=r) for r in config['__repositories']]
+        config['get_response'] = get_html_template.replace('%OPTIONS%', ''.join(select_options))
     # Webサーバ起動
     if options.daemon:
         # デーモンとして起動
