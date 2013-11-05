@@ -1,25 +1,28 @@
 # gitpull_server.py
 
+## これは何？
+
 Github の [Post-Receive Hooks][github1] や Backlog の [Git Web フック][backlog1] は、
 git pull をフックとして任意のURLに POST リクエストを送信させられるサービスです。
 
-gitpull_server.py は、このリクエストを受信して git pull を自動実行するサーバアプリケーションです。
+**gitpull_server.py** は、このリクエストを受信して git pull を自動実行するサーバアプリケーションです。
 
 既存の Web サーバ（Apache 等）上で動くアプリケーションではなく、独立した Web サーバとして動作するため、任意のユーザで実行させることができ、UNIX のパーミッションの問題を回避できます。
 
 みんな大好き Python 製です。
 
-# 注意点
+## 注意点
 
 - パスワードなしで git pull 出来るリポジトリのみ対応（今のところ）。パスワードなし公開鍵で SSH で git pull するようにして下さい。
 - 専用のポートを開ける必要があるため、使いどころには注意して下さい。開発サーバで git pull の手間を省く用途を想定しています。
-- ポート番号さえ分かれば誰でも git pull を実行させられてしまうというリスクがあります。
+- ポート番号さえ分かれば誰でも git pull を実行させられてしまうというリスクがあります。  
+リクエストの FROM アドレスでアクセス制限かけたらいいってだけの話ですけどね \_(:3｣∠)\_ そのうちやりますってば…
 
-# セットアップ
+## セットアップ
 
 3段階に分けて説明します。
 
-## 1. Python 環境の準備
+### 1. Python 環境の準備
 
 Python の2系がインストールされていなければインストールして下さい。
 
@@ -40,7 +43,7 @@ pip を使って、動作に必要なモジュールを自動でインストー�
 
     $ pip install -r packages.txt
 
-ちなみに、インストール済みのパッケージ一覧は `pip list` で。
+ちなみにインストール済みのパッケージ一覧は `pip list` で。
 
 	$ pip list
 
@@ -83,7 +86,7 @@ select でリポジトリを選択して、ボタンをクリックして下さ�
 
 
 
-## 3. Backlog の Git Web フック経由で動作させる
+### 3. Backlog の Git Web フック経由で動作させる
 
 gitpull_server.py をデーモンとして立ち上げてしまいましょう。
 `-d` オプションを付けて起動するだけ。
@@ -110,14 +113,28 @@ Backlog の場合は[このへん][backlog1]を参考に、
 変更がサーバ上のリポジトリに自動で反映されていれば成功です。
 
 
-# デーモンを停止するには
+
+## デーモンを停止するには
 
 `-k` オプションで kill 出来ます。
 
 	$ ./gitpull_server.py config.yml -k
 
+もしくは普通に kill しちゃって下さい。
 
-# 参考
+	$ pkill -f gitpull_server
+
+
+
+## ライセンス
+
+Licensed under the [MIT](http://www.opensource.org/licenses/MIT) license.
+
+Copyright 2013 Shimon Yamada
+
+
+
+## 参考
 - [Git Webフック｜Backlogを使いこなそう｜どこでもプロジェクト管理バックログ][backlog1]
 - [サルでも分かるGit Webフック入門 | Backlogブログ][backlog2]
 - [Bottle: Python Web Framework](http://bottlepy.org/docs/dev/)
