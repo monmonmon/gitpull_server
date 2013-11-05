@@ -128,7 +128,12 @@ def process_post():
         print "committer: " + email_address
         # origin を git pull
         repo = git.Repo(repository_directory)
-        repo.remotes.origin.pull()
+        try:
+            repo.remotes.origin.pull()
+        except AssertionError as e:
+            # GitPython==0.3.2.RC1 のバグによる例外を回避。
+            # git pull 実行結果のstderr出力を処理し損ねてるだけなので無視
+            pass
         return """<!DOCTYPE html>
 <html>
   <head>
@@ -140,7 +145,7 @@ def process_post():
 </html>
 """
     except Exception as e:
-        print "ERROR: ", e
+        print "ERROR:", e
 
 def main():
     """
