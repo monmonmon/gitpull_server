@@ -104,8 +104,7 @@ def process_get():
     """
     GETリクエストを処理する
     """
-    options = ['<option>{r}</option>'.format(r=r) for r in config['__repositories']]
-    return config['get_response_template'].replace('%OPTIONS%', ''.join(options))
+    return config['get_response']
 
 @post('/')
 def process_post():
@@ -176,13 +175,13 @@ def main():
         else:
             print "daemon is not running"
         return 1
-    # GETリクエストへのレスポンス用のHTMLテンプレートを読み込んでおく
+    # GETリクエストへのレスポンスHTMLを読み込んでおく
     template_path = os.path.join(
         os.path.abspath(os.path.dirname(__file__)), 'get.html.tmpl')
     with open(template_path, 'rb') as fp:
-        config['get_response_template'] = fp.read()
-    # ホスト名を取得
-    hostname = os.uname()[1]
+        get_html_template = fp.read()
+        options = ['<option>{r}</option>'.format(r=r) for r in config['__repositories']]
+        config['get_response'] = get_html_template.replace('%OPTIONS%', ''.join(options))
     # Webサーバ起動
     if options.daemon:
         # デーモンとして起動
