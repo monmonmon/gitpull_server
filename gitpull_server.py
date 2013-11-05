@@ -113,11 +113,16 @@ def process_post():
     POSTリクエストを処理する
     """
     try:
-        # リクエストからリポジトリ名、コミットした人のEMAILアドレスを抜き出す
+        # リクエストからリポジトリ名を取得
         payload = request.forms['payload']
         data = json.loads(payload)
-        email_address = data['commits'][0]['author']['email']
         repository_name = data['repository']['name']
+        # コミットした人のEMAILアドレスを取得
+        #   Backlog では "revisions" Github では "commits"？
+        if 'commits' in data:
+            email_address = data['commits'][0]['author']['email']
+        elif 'revisions' in data:
+            email_address = data['revisions'][0]['author']['email']
         # リポジトリ名からGITディレクトリを取得
         repository_directory = config['__repositories'].get(repository_name)
         if not repository_directory:
